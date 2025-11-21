@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block title %}Campaigns - Email Outreach Platform{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="page-header">
+        <h2>Campaigns</h2>
+        <button class="btn btn-primary" onclick="showCreateCampaignModal()">+ Create Campaign</button>
+    </div>
+    
+    <div class="campaigns-list" id="campaignsList">
+        <div class="loading">Loading campaigns...</div>
+    </div>
+</div>
+
+<!-- Create Campaign Modal -->
+<div id="createCampaignModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Create New Campaign</h3>
+            <span class="close" onclick="closeModal('createCampaignModal')">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="createCampaignForm">
+                <div class="form-group">
+                    <label>Campaign Name</label>
+                    <input type="text" name="name" required placeholder="My Campaign">
+                </div>
+                
+                <div class="form-group">
+                    <label>Template</label>
+                    <select name="template_id" id="templateSelect" required>
+                        <option value="">Select a template...</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Contacts</label>
+                    <select name="contact_ids" id="contactSelect" multiple size="5">
+                        <option value="all">All Pending Contacts</option>
+                    </select>
+                    <small>Hold Ctrl/Cmd to select multiple, or leave empty for all pending</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>Max Emails (optional)</label>
+                    <input type="number" name="max_emails" placeholder="Leave empty for all">
+                </div>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="resend">
+                        Allow resending to contacts already sent
+                    </label>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('createCampaignModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Campaign</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadCampaigns();
+    loadTemplates();
+    loadContacts();
+    setInterval(loadCampaigns, 5000); // Refresh every 5 seconds
+});
+
+function loadCampaigns() {
+    fetch('/api/campaigns')
+        .then(res => res.json())
+        .then(campaigns => {
+            const listDiv = document.getElementById('campaignsList');
+            if (campaigns.length === 0) {
+                listDiv.innerHTML = '<div class="empty-state">No campaigns yet. Create your first campaign!</div>';
+                return;
+            }
+            
+            listDiv.innerHTML = campaigns.map(campaign => `
+                <div class="campaign-card">
+                    <div class="campaign-header">
+                        <h3>${campaign.name}</h3>
+                        <span class="badge badge-${campaign.status}">${campaign.status}</span>
+                    </div>
+                    <div class="campaign-body">
+                        <div class="campaign-stats">
+                            <div class="stat">
+                                <span class="stat-label">Sent:</span>
+                                <span class="stat-value">${campaign.emails_sent || 0}</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-label">Failed:</span>
+                                <span class="stat-value">${campaign.emails_failed || 0}</span>
+                            </div>
+                            ${campaign.status === 'running' ? `
+                            <div class="stat">
+                                <span class="stat-label">Progress:</span>
+                                <span class="stat-value">${campaign.progress?.percentage?.toFixed(1) || 0}%</span>
+                            </div>
+                            ` : ''}
+                        </div>
+                        ${campaign.status === 'running' && campaign.progress ? `
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${campaign.progress.percentage || 0}%"></div>
+                        </div>
+                        ` : ''}
+                        <div class="campaign-actions">
+                            ${campaign.status === 'pending' ? `
+                            <button class="btn btn-sm btn-success" onclick="startCampaign('${campaign.id}')">Start</button>
+                            ` : ''}
+                            ${campaign.status === 'running' ? `
+                            <button class="btn btn-sm btn-info" onclick="viewCampaign('${campaign.id}')">View Progress</button>
+                            ` : ''}
+                            <button class="btn btn-sm btn-danger" onclick="deleteCampaign('${campaign.id}')">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        })
+        .catch(err => console.error('Error loading campaigns:', err));
+}
+
+function loadTemplates() {
+    fetch('/api/templates')
+        .then(res => res.json())
+        .then(templates => {
+            const select = document.getElementById('templateSelect');
+            templates.forEach(template => {
+                const option = document.createElement('option');
+                option.value = template.id;
+                option.textContent = template.name;
+                select.appendChild(option);
+            });
+        });
+}
+
+function loadContacts() {
+    fetch('/api/contacts')
+        .then(res => res.json())
+        .then(contacts => {
+            const select = document.getElementById('contactSelect');
+            contacts.filter(c => c.status === 'pending').forEach(contact => {
+                const option = document.createElement('option');
+                option.value = contact.id;
+                option.textContent = `${contact.email} - ${contact.first_name} ${contact.last_name}`.trim();
+                select.appendChild(option);
+            });
+        });
+}
+
+function showCreateCampaignModal() {
+    document.getElementById('createCampaignModal').style.display = 'block';
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+
+document.getElementById('createCampaignForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const data = {
+        name: formData.get('name'),
+        template_id: formData.get('template_id'),
+        max_emails: formData.get('max_emails') ? parseInt(formData.get('max_emails')) : null,
+        resend: formData.has('resend'),
+        contact_ids: Array.from(document.getElementById('contactSelect').selectedOptions)
+            .map(opt => opt.value)
+            .filter(v => v !== 'all')
+    };
+    
+    fetch('/api/campaigns', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(res => res.json())
+    .then(campaign => {
+        closeModal('createCampaignModal');
+        loadCampaigns();
+        e.target.reset();
+    })
+    .catch(err => alert('Error creating campaign: ' + err.message));
+});
+
+function startCampaign(campaignId) {
+    fetch(`/api/campaigns/${campaignId}/start`, {method: 'POST'})
+        .then(res => res.json())
+        .then(data => {
+            loadCampaigns();
+        })
+        .catch(err => alert('Error starting campaign: ' + err.message));
+}
+
+function deleteCampaign(campaignId) {
+    if (!confirm('Are you sure you want to delete this campaign?')) return;
+    
+    fetch(`/api/campaigns/${campaignId}`, {method: 'DELETE'})
+        .then(res => res.json())
+        .then(data => {
+            loadCampaigns();
+        })
+        .catch(err => alert('Error deleting campaign: ' + err.message));
+}
+
+function viewCampaign(campaignId) {
+    fetch(`/api/campaigns/${campaignId}`)
+        .then(res => res.json())
+        .then(campaign => {
+            alert(`Campaign: ${campaign.name}\nStatus: ${campaign.status}\nProgress: ${campaign.progress?.current || 0}/${campaign.progress?.total || 0} (${campaign.progress?.percentage?.toFixed(1) || 0}%)\nSent: ${campaign.emails_sent || 0}\nFailed: ${campaign.emails_failed || 0}`);
+        });
+}
+</script>
+{% endblock %}
+

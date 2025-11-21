@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+
+{% block title %}SMTP Accounts - Email Outreach Platform{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="page-header">
+        <h2>SMTP Accounts</h2>
+        <button class="btn btn-primary" onclick="showAddAccountModal()">+ Add SMTP Account</button>
+    </div>
+    
+    <div class="accounts-grid" id="accountsGrid">
+        <div class="loading">Loading accounts...</div>
+    </div>
+</div>
+
+<!-- Add/Edit Account Modal -->
+<div id="accountModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modalTitle">Add SMTP Account</h3>
+            <span class="close" onclick="closeModal('accountModal')">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="accountForm">
+                <input type="hidden" id="accountId" name="id">
+                <div class="form-group">
+                    <label>Account Name</label>
+                    <input type="text" id="accountName" name="name" required placeholder="Gmail Account 1">
+                </div>
+                <div class="form-group">
+                    <label>SMTP Host</label>
+                    <input type="text" id="accountHost" name="host" required placeholder="smtp.gmail.com">
+                </div>
+                <div class="form-group">
+                    <label>SMTP Port</label>
+                    <input type="number" id="accountPort" name="port" required value="587">
+                </div>
+                <div class="form-group">
+                    <label>Username/Email</label>
+                    <input type="text" id="accountUsername" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label>Password/App Password</label>
+                    <input type="password" id="accountPassword" name="password" required>
+                </div>
+                <div class="form-group">
+                    <label>From Email</label>
+                    <input type="email" id="accountFromEmail" name="from_email" required>
+                </div>
+                <div class="form-group">
+                    <label>From Name</label>
+                    <input type="text" id="accountFromName" name="from_name" placeholder="Your Name">
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="accountUseTls" name="use_tls" checked>
+                        Use TLS
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="accountUseSsl" name="use_ssl">
+                        Use SSL
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>Daily Limit</label>
+                    <input type="number" id="accountDailyLimit" name="daily_limit" value="500">
+                </div>
+                <div class="form-group">
+                    <label>Hourly Limit</label>
+                    <input type="number" id="accountHourlyLimit" name="hourly_limit" value="50">
+                </div>
+                <div class="form-group">
+                    <label>Delay Between Emails (seconds)</label>
+                    <input type="number" id="accountDelay" name="delay_between_emails" step="0.1" value="2.0">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="testAccount()">Test Connection</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('accountModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Account</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+let editingAccountId = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadAccounts();
+});
+
+function loadAccounts() {
+    fetch('/api/smtp-accounts')
+        .then(res => res.json())
+        .then(accounts => {
+            const grid = document.getElementById('accountsGrid');
+            if (accounts.length === 0) {
+                grid.innerHTML = '<div class="empty-state">No SMTP accounts configured. Add your first account to start sending emails!</div>';
+                return;
+            }
+            
+            grid.innerHTML = accounts.map(account => `
+                <div class="account-card">
+                    <div class="account-header">
+                        <h3>${account.name}</h3>
+                        <span class="badge badge-${account.is_active ? 'success' : 'danger'}">${account.is_active ? 'Active' : 'Inactive'}</span>
+                    </div>
+                    <div class="account-body">
+                        <div class="account-info">
+                            <div><strong>Host:</strong> ${account.host}:${account.port}</div>
+                            <div><strong>From:</strong> ${account.from_email}</div>
+                            <div><strong>Daily Limit:</strong> ${account.daily_limit}</div>
+                            <div><strong>Hourly Limit:</strong> ${account.hourly_limit}</div>
+                        </div>
+                        <div class="account-actions">
+                            <button class="btn btn-sm btn-info" onclick="editAccount('${account.id}')">Edit</button>
+                            <button class="btn btn-sm btn-success" onclick="testAccount('${account.id}')">Test</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteAccount('${account.id}')">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        });
+}
+
+function showAddAccountModal() {
+    editingAccountId = null;
+    document.getElementById('modalTitle').textContent = 'Add SMTP Account';
+    document.getElementById('accountForm').reset();
+    document.getElementById('accountId').value = '';
+    document.getElementById('accountPort').value = '587';
+    document.getElementById('accountDailyLimit').value = '500';
+    document.getElementById('accountHourlyLimit').value = '50';
+    document.getElementById('accountDelay').value = '2.0';
+    document.getElementById('accountUseTls').checked = true;
+    document.getElementById('accountModal').style.display = 'block';
+}
+
+function editAccount(accountId) {
+    editingAccountId = accountId;
+    fetch(`/api/smtp-accounts/${accountId}`)
+        .then(res => res.json())
+        .then(account => {
+            document.getElementById('modalTitle').textContent = 'Edit SMTP Account';
+            document.getElementById('accountId').value = account.id;
+            document.getElementById('accountName').value = account.name || '';
+            document.getElementById('accountHost').value = account.host || '';
+            document.getElementById('accountPort').value = account.port || 587;
+            document.getElementById('accountUsername').value = account.username || '';
+            document.getElementById('accountPassword').value = '';
+            document.getElementById('accountFromEmail').value = account.from_email || '';
+            document.getElementById('accountFromName').value = account.from_name || '';
+            document.getElementById('accountUseTls').checked = account.use_tls !== false;
+            document.getElementById('accountUseSsl').checked = account.use_ssl === true;
+            document.getElementById('accountDailyLimit').value = account.daily_limit || 500;
+            document.getElementById('accountHourlyLimit').value = account.hourly_limit || 50;
+            document.getElementById('accountDelay').value = account.delay_between_emails || 2.0;
+            document.getElementById('accountModal').style.display = 'block';
+        });
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+    editingAccountId = null;
+}
+
+document.getElementById('accountForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const data = {
+        name: document.getElementById('accountName').value,
+        host: document.getElementById('accountHost').value,
+        port: parseInt(document.getElementById('accountPort').value),
+        username: document.getElementById('accountUsername').value,
+        password: document.getElementById('accountPassword').value,
+        from_email: document.getElementById('accountFromEmail').value,
+        from_name: document.getElementById('accountFromName').value,
+        use_tls: document.getElementById('accountUseTls').checked,
+        use_ssl: document.getElementById('accountUseSsl').checked,
+        daily_limit: parseInt(document.getElementById('accountDailyLimit').value),
+        hourly_limit: parseInt(document.getElementById('accountHourlyLimit').value),
+        delay_between_emails: parseFloat(document.getElementById('accountDelay').value),
+        is_active: true
+    };
+    
+    const url = editingAccountId ? `/api/smtp-accounts/${editingAccountId}` : '/api/smtp-accounts';
+    const method = editingAccountId ? 'PUT' : 'POST';
+    
+    fetch(url, {
+        method: method,
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(res => res.json())
+    .then(account => {
+        closeModal('accountModal');
+        loadAccounts();
+        if (!editingAccountId) {
+            alert('Account added successfully!');
+        }
+    })
+    .catch(err => alert('Error saving account: ' + err.message));
+});
+
+function testAccount(accountId) {
+    if (!accountId && !editingAccountId) {
+        alert('Please save the account first before testing');
+        return;
+    }
+    
+    const testId = accountId || editingAccountId;
+    fetch(`/api/smtp-accounts/${testId}/test`, {method: 'POST'})
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert('Connection test successful!');
+            } else {
+                alert('Connection test failed: ' + data.message);
+            }
+        })
+        .catch(err => alert('Error testing connection: ' + err.message));
+}
+
+function deleteAccount(accountId) {
+    if (!confirm('Are you sure you want to delete this SMTP account?')) return;
+    
+    fetch(`/api/smtp-accounts/${accountId}`, {method: 'DELETE'})
+        .then(res => res.json())
+        .then(data => {
+            loadAccounts();
+        })
+        .catch(err => alert('Error deleting account: ' + err.message));
+}
+</script>
+{% endblock %}
+

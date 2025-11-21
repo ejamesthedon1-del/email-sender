@@ -1,0 +1,32 @@
+{
+  "rules": [
+    {
+      "name": "First Follow-up",
+      "trigger": "days_after_no_reply",
+      "days": 3,
+      "subject_template": "Re: Quick question about {Brokerage}",
+      "body_template": "Hi {FirstName},\n\nI wanted to follow up on my previous email. I know you're busy, but I'd love to connect if you have a moment.\n\nBest regards,\nYour Name",
+      "max_followups": 1,
+      "enabled": true
+    },
+    {
+      "name": "Second Follow-up",
+      "trigger": "days_after_no_reply",
+      "days": 7,
+      "subject_template": "Following up - {Brokerage}",
+      "body_template": "Hi {FirstName},\n\nJust wanted to check in one more time. If this isn't a good time, no worries at all.\n\nBest regards,\nYour Name",
+      "max_followups": 1,
+      "enabled": true
+    },
+    {
+      "name": "Retry Failed",
+      "trigger": "days_after_failure",
+      "days": 1,
+      "subject_template": "Quick question about {Brokerage} in {City}",
+      "body_template": "Hi {FirstName},\n\nI hope this email finds you well. I wanted to reach out about a potential opportunity.\n\nBest regards,\nYour Name",
+      "max_followups": 2,
+      "enabled": true
+    }
+  ]
+}
+

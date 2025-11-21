@@ -1,0 +1,5 @@
+email,first_name,last_name,company,brokerage,city,state,custom1,custom2,custom3,custom4,custom5
+john.doe@example.com,John,Doe,ABC Realty,ABC Realty Group,New York,NY,Commercial,5 years,LinkedIn,High,2024-01-15
+jane.smith@example.com,Jane,Smith,XYZ Properties,XYZ Real Estate,Los Angeles,CA,Residential,10 years,Referral,Medium,2024-02-20
+bob.johnson@example.com,Bob,Johnson,Best Homes,Best Homes Inc,Chicago,IL,Mixed,3 years,Website,Low,2024-03-10
+

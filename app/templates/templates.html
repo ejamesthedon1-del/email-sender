@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block title %}Templates - Email Outreach Platform{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="page-header">
+        <h2>Email Templates</h2>
+        <button class="btn btn-primary" onclick="showCreateTemplateModal()">+ Create Template</button>
+    </div>
+    
+    <div class="templates-grid" id="templatesGrid">
+        <div class="loading">Loading templates...</div>
+    </div>
+</div>
+
+<!-- Create/Edit Template Modal -->
+<div id="templateModal" class="modal">
+    <div class="modal-content modal-large">
+        <div class="modal-header">
+            <h3 id="modalTitle">Create Template</h3>
+            <span class="close" onclick="closeModal('templateModal')">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="templateForm">
+                <input type="hidden" id="templateId" name="id">
+                <div class="form-group">
+                    <label>Template Name</label>
+                    <input type="text" id="templateName" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label>Subject</label>
+                    <input type="text" id="templateSubject" name="subject" required placeholder="e.g., Quick question about {Brokerage}">
+                    <small>Use variables like {FirstName}, {Brokerage}, {City}, etc.</small>
+                </div>
+                <div class="form-group">
+                    <label>Body (Plain Text)</label>
+                    <textarea id="templateBody" name="body" rows="10" required placeholder="Hi {FirstName},&#10;&#10;I hope this email finds you well..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>HTML Body (Optional)</label>
+                    <textarea id="templateHtml" name="html_body" rows="10" placeholder="<html>...</html>"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="templateDescription" name="description" rows="2"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="previewTemplate()">Preview</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('templateModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Template</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+let editingTemplateId = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadTemplates();
+});
+
+function loadTemplates() {
+    fetch('/api/templates')
+        .then(res => res.json())
+        .then(templates => {
+            const grid = document.getElementById('templatesGrid');
+            if (templates.length === 0) {
+                grid.innerHTML = '<div class="empty-state">No templates yet. Create your first template!</div>';
+                return;
+            }
+            
+            grid.innerHTML = templates.map(template => `
+                <div class="template-card">
+                    <div class="template-header">
+                        <h3>${template.name}</h3>
+                        <div class="template-actions">
+                            <button class="btn btn-sm btn-info" onclick="editTemplate('${template.id}')">Edit</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteTemplate('${template.id}')">Delete</button>
+                        </div>
+                    </div>
+                    <div class="template-body">
+                        <div class="template-preview">
+                            <strong>Subject:</strong> ${template.subject || '-'}
+                        </div>
+                        <div class="template-preview">
+                            <strong>Body:</strong> ${(template.body || '').substring(0, 100)}${(template.body || '').length > 100 ? '...' : ''}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        });
+}
+
+function showCreateTemplateModal() {
+    editingTemplateId = null;
+    document.getElementById('modalTitle').textContent = 'Create Template';
+    document.getElementById('templateForm').reset();
+    document.getElementById('templateId').value = '';
+    document.getElementById('templateModal').style.display = 'block';
+}
+
+function editTemplate(templateId) {
+    editingTemplateId = templateId;
+    fetch(`/api/templates/${templateId}`)
+        .then(res => res.json())
+        .then(template => {
+            document.getElementById('modalTitle').textContent = 'Edit Template';
+            document.getElementById('templateId').value = template.id;
+            document.getElementById('templateName').value = template.name || '';
+            document.getElementById('templateSubject').value = template.subject || '';
+            document.getElementById('templateBody').value = template.body || '';
+            document.getElementById('templateHtml').value = template.html_body || '';
+            document.getElementById('templateDescription').value = template.description || '';
+            document.getElementById('templateModal').style.display = 'block';
+        });
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+    editingTemplateId = null;
+}
+
+document.getElementById('templateForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const data = {
+        name: document.getElementById('templateName').value,
+        subject: document.getElementById('templateSubject').value,
+        body: document.getElementById('templateBody').value,
+        html_body: document.getElementById('templateHtml').value,
+        description: document.getElementById('templateDescription').value
+    };
+    
+    const url = editingTemplateId ? `/api/templates/${editingTemplateId}` : '/api/templates';
+    const method = editingTemplateId ? 'PUT' : 'POST';
+    
+    fetch(url, {
+        method: method,
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(res => res.json())
+    .then(template => {
+        closeModal('templateModal');
+        loadTemplates();
+    })
+    .catch(err => alert('Error saving template: ' + err.message));
+});
+
+function deleteTemplate(templateId) {
+    if (!confirm('Are you sure you want to delete this template?')) return;
+    
+    fetch(`/api/templates/${templateId}`, {method: 'DELETE'})
+        .then(res => res.json())
+        .then(data => {
+            loadTemplates();
+        })
+        .catch(err => alert('Error deleting template: ' + err.message));
+}
+
+function previewTemplate() {
+    const subject = document.getElementById('templateSubject').value;
+    const body = document.getElementById('templateBody').value;
+    const html = document.getElementById('templateHtml').value;
+    
+    if (!subject && !body) {
+        alert('Please enter subject and body to preview');
+        return;
+    }
+    
+    const sampleData = {
+        FirstName: 'John',
+        LastName: 'Doe',
+        Brokerage: 'ABC Realty',
+        City: 'New York',
+        State: 'NY',
+        Custom1: 'Commercial',
+        Custom2: '5 years'
+    };
+    
+    // Simple preview (replace variables)
+    let previewSubject = subject;
+    let previewBody = body;
+    Object.keys(sampleData).forEach(key => {
+        previewSubject = previewSubject.replace(new RegExp(`\\{${key}\\}`, 'g'), sampleData[key]);
+        previewBody = previewBody.replace(new RegExp(`\\{${key}\\}`, 'g'), sampleData[key]);
+    });
+    
+    alert(`Subject: ${previewSubject}\n\nBody:\n${previewBody}`);
+}
+</script>
+{% endblock %}
+

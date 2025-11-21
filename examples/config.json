@@ -1,0 +1,33 @@
+{
+  "smtp_accounts": [
+    {
+      "name": "Account_1",
+      "host": "smtp.gmail.com",
+      "port": 587,
+      "username": "your_email@gmail.com",
+      "password": "your_app_password",
+      "from_email": "your_email@gmail.com",
+      "from_name": "Your Name",
+      "use_tls": true,
+      "use_ssl": false,
+      "daily_limit": 500,
+      "hourly_limit": 50,
+      "delay_between_emails": 2.0
+    },
+    {
+      "name": "Account_2",
+      "host": "smtp.gmail.com",
+      "port": 587,
+      "username": "another_email@gmail.com",
+      "password": "another_app_password",
+      "from_email": "another_email@gmail.com",
+      "from_name": "Another Name",
+      "use_tls": true,
+      "use_ssl": false,
+      "daily_limit": 500,
+      "hourly_limit": 50,
+      "delay_between_emails": 2.0
+    }
+  ]
+}
+

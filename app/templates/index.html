@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Email Outreach Platform{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="page-header">
+        <h2>Dashboard</h2>
+        <button class="btn btn-primary" onclick="location.href='/campaigns'">Create Campaign</button>
+    </div>
+    
+    <div class="stats-grid" id="statsGrid">
+        <div class="stat-card">
+            <div class="stat-icon">📊</div>
+            <div class="stat-content">
+                <div class="stat-value" id="totalCampaigns">-</div>
+                <div class="stat-label">Total Campaigns</div>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon">✉️</div>
+            <div class="stat-content">
+                <div class="stat-value" id="totalSent">-</div>
+                <div class="stat-label">Emails Sent</div>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon">👥</div>
+            <div class="stat-content">
+                <div class="stat-value" id="totalContacts">-</div>
+                <div class="stat-label">Total Contacts</div>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon">✅</div>
+            <div class="stat-content">
+                <div class="stat-value" id="successRate">-</div>
+                <div class="stat-label">Success Rate</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="dashboard-grid">
+        <div class="dashboard-card">
+            <h3>Recent Campaigns</h3>
+            <div id="recentCampaigns" class="campaign-list">
+                <div class="loading">Loading...</div>
+            </div>
+        </div>
+        
+        <div class="dashboard-card">
+            <h3>SMTP Account Status</h3>
+            <div id="smtpStatus" class="smtp-status">
+                <div class="loading">Loading...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadDashboard();
+    setInterval(loadDashboard, 30000); // Refresh every 30 seconds
+});
+
+function loadDashboard() {
+    fetch('/api/dashboard/stats')
+        .then(res => res.json())
+        .then(data => {
+            document.getElementById('totalCampaigns').textContent = data.campaigns.total;
+            document.getElementById('totalSent').textContent = data.emails.total_sent.toLocaleString();
+            document.getElementById('totalContacts').textContent = data.contacts.total.toLocaleString();
+            document.getElementById('successRate').textContent = data.emails.success_rate.toFixed(1) + '%';
+            
+            // SMTP Status
+            const smtpDiv = document.getElementById('smtpStatus');
+            smtpDiv.innerHTML = `
+                <div class="status-item">
+                    <span>Total Accounts:</span>
+                    <strong>${data.smtp_accounts.total}</strong>
+                </div>
+                <div class="status-item">
+                    <span>Active Accounts:</span>
+                    <strong class="text-success">${data.smtp_accounts.active}</strong>
+                </div>
+            `;
+        })
+        .catch(err => console.error('Error loading dashboard:', err));
+    
+    fetch('/api/dashboard/recent-campaigns')
+        .then(res => res.json())
+        .then(campaigns => {
+            const campaignsDiv = document.getElementById('recentCampaigns');
+            if (campaigns.length === 0) {
+                campaignsDiv.innerHTML = '<div class="empty-state">No campaigns yet</div>';
+                return;
+            }
+            
+            campaignsDiv.innerHTML = campaigns.map(campaign => `
+                <div class="campaign-item">
+                    <div class="campaign-name">${campaign.name}</div>
+                    <div class="campaign-meta">
+                        <span class="badge badge-${campaign.status}">${campaign.status}</span>
+                        <span>${campaign.emails_sent || 0} sent</span>
+                    </div>
+                </div>
+            `).join('');
+        })
+        .catch(err => console.error('Error loading campaigns:', err));
+}
+</script>
+{% endblock %}
+
