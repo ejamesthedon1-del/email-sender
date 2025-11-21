@@ -51,16 +51,16 @@ class EmailSender:
             html_template: Optional HTML email body template
         
         Returns:
-            SendResult object
+            SendResult object with account information
         """
-        # Get available SMTP account
+        # Get available SMTP account (from the filtered list set in campaign)
         account = self.smtp_manager.get_available_account()
         if not account:
             return SendResult(
                 success=False,
                 contact_email=contact.email,
                 account_name="none",
-                error_message="No available SMTP accounts"
+                error_message="No available SMTP accounts from the selected accounts"
             )
         
         # Render templates with contact variables

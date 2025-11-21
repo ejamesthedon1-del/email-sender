@@ -91,13 +91,25 @@ function loadCampaigns() {
                 return;
             }
             
-            listDiv.innerHTML = campaigns.map(campaign => `
+            listDiv.innerHTML = campaigns.map(campaign => {
+                // Get SMTP account info for display
+                let smtpInfo = '';
+                if (campaign.smtp_account_ids && campaign.smtp_account_ids.length > 0) {
+                    if (campaign.smtp_account_ids.includes('all')) {
+                        smtpInfo = '<div class="smtp-info"><small>📧 SMTP: All Active Accounts</small></div>';
+                    } else {
+                        smtpInfo = `<div class="smtp-info"><small>📧 SMTP: ${campaign.smtp_account_ids.length} account(s) selected</small></div>`;
+                    }
+                }
+                
+                return `
                 <div class="campaign-card">
                     <div class="campaign-header">
                         <h3>${campaign.name}</h3>
                         <span class="badge badge-${campaign.status}">${campaign.status}</span>
                     </div>
                     <div class="campaign-body">
+                        ${smtpInfo}
                         <div class="campaign-stats">
                             <div class="stat">
                                 <span class="stat-label">Sent:</span>
@@ -130,7 +142,8 @@ function loadCampaigns() {
                         </div>
                     </div>
                 </div>
-            `).join('');
+                `;
+            }).join('');
         })
         .catch(err => console.error('Error loading campaigns:', err));
 }

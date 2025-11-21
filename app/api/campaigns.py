@@ -28,7 +28,9 @@ def run_campaign(campaign_id: str, campaign_data: dict):
         # Normalize selected account IDs to strings for comparison
         if isinstance(selected_account_ids, str):
             selected_account_ids = [selected_account_ids]
-        selected_account_ids = [str(aid) for aid in selected_account_ids]
+        elif selected_account_ids is None:
+            selected_account_ids = ['all']
+        selected_account_ids = [str(aid) for aid in selected_account_ids if aid]
         
         # If 'all' is selected or not specified, use all active accounts
         use_all_accounts = 'all' in selected_account_ids or len(selected_account_ids) == 0
@@ -36,6 +38,7 @@ def run_campaign(campaign_id: str, campaign_data: dict):
         logger.info(f"Campaign {campaign_id}: Selected SMTP account IDs: {selected_account_ids}, Use all: {use_all_accounts}")
         
         accounts = []
+        skipped_accounts = []
         for acc_data in smtp_accounts_data:
             # Check if account should be used
             account_id = str(acc_data.get('id', ''))
@@ -43,7 +46,8 @@ def run_campaign(campaign_id: str, campaign_data: dict):
             # Skip if not using all accounts and this account is not in the selected list
             if not use_all_accounts:
                 if account_id not in selected_account_ids:
-                    logger.debug(f"Skipping account {account_id} - not in selected list")
+                    skipped_accounts.append(account_id)
+                    logger.debug(f"Skipping account {account_id} ({acc_data.get('name', 'Unknown')}) - not in selected list")
                     continue
             
             # Only add active accounts
@@ -64,13 +68,21 @@ def run_campaign(campaign_id: str, campaign_data: dict):
                         delay_between_emails=acc_data.get('delay_between_emails', 2.0)
                     )
                     accounts.append(acc)
-                    logger.info(f"Added SMTP account: {acc.name} (ID: {account_id})")
+                    logger.info(f"✓ Added SMTP account: {acc.name} (ID: {account_id}) - From: {acc.from_email}")
                 except Exception as e:
-                    logger.error(f"Error creating SMTP account {acc_data.get('name')}: {str(e)}")
+                    logger.error(f"✗ Error creating SMTP account {acc_data.get('name')}: {str(e)}")
+            else:
+                logger.warning(f"Account {account_id} ({acc_data.get('name', 'Unknown')}) is inactive - skipping")
+        
+        # Log summary
+        logger.info(f"Campaign {campaign_id}: Using {len(accounts)} SMTP account(s): {[acc.name for acc in accounts]}")
+        if skipped_accounts and not use_all_accounts:
+            logger.info(f"Campaign {campaign_id}: Skipped {len(skipped_accounts)} account(s) not in selection: {skipped_accounts}")
         
         if not accounts:
             error_msg = 'No active SMTP accounts available or selected accounts not found'
             logger.error(f"Campaign {campaign_id}: {error_msg}")
+            logger.error(f"Campaign {campaign_id}: Selected IDs were: {selected_account_ids}")
             Storage.update('campaigns', campaign_id, {
                 'status': 'failed',
                 'error': error_msg
@@ -230,6 +242,27 @@ def create_campaign():
     
     # Convert all to strings for consistency
     smtp_account_ids = [str(aid) for aid in smtp_account_ids]
+    
+    # Validate selected SMTP accounts exist (if not 'all')
+    if 'all' not in smtp_account_ids:
+        smtp_accounts_data = Storage.load('smtp_accounts')
+        available_account_ids = [str(acc.get('id', '')) for acc in smtp_accounts_data]
+        invalid_ids = [aid for aid in smtp_account_ids if aid not in available_account_ids]
+        
+        if invalid_ids:
+            return jsonify({
+                'error': f'Invalid SMTP account IDs selected: {invalid_ids}. Please select valid accounts.'
+            }), 400
+        
+        # Check if selected accounts are active
+        inactive_accounts = []
+        for acc in smtp_accounts_data:
+            if str(acc.get('id', '')) in smtp_account_ids and not acc.get('is_active', True):
+                inactive_accounts.append(acc.get('name', acc.get('id', 'Unknown')))
+        
+        if inactive_accounts:
+            logger.warning(f"Campaign creation: Selected accounts are inactive: {inactive_accounts}")
+            # Don't fail, just warn - they might activate them later
     
     logger.info(f"Creating campaign with SMTP account IDs: {smtp_account_ids}")
     
