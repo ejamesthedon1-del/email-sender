@@ -150,18 +150,35 @@ function loadTemplates() {
 }
 
 function loadSmtpAccounts() {
+    const select = document.getElementById('smtpAccountSelect');
+    if (!select) {
+        console.error('SMTP account select element not found');
+        return;
+    }
+    
     fetch('/api/smtp-accounts')
         .then(res => res.json())
         .then(accounts => {
-            const select = document.getElementById('smtpAccountSelect');
             // Clear existing options except "All Active Accounts"
-            select.innerHTML = '<option value="all">All Active Accounts</option>';
-            accounts.filter(a => a.is_active).forEach(account => {
+            select.innerHTML = '<option value="all" selected>All Active Accounts</option>';
+            const activeAccounts = accounts.filter(a => a.is_active);
+            if (activeAccounts.length === 0) {
                 const option = document.createElement('option');
-                option.value = account.id;
-                option.textContent = `${account.name} (${account.from_email})`;
+                option.value = '';
+                option.textContent = 'No active SMTP accounts - Add accounts first';
+                option.disabled = true;
                 select.appendChild(option);
-            });
+            } else {
+                activeAccounts.forEach(account => {
+                    const option = document.createElement('option');
+                    option.value = account.id;
+                    option.textContent = `${account.name} (${account.from_email})`;
+                    select.appendChild(option);
+                });
+            }
+        })
+        .catch(err => {
+            console.error('Error loading SMTP accounts:', err);
         });
 }
 
@@ -181,6 +198,8 @@ function loadContacts() {
 
 function showCreateCampaignModal() {
     document.getElementById('createCampaignModal').style.display = 'block';
+    // Reload SMTP accounts when modal opens
+    loadSmtpAccounts();
 }
 
 function closeModal(modalId) {
