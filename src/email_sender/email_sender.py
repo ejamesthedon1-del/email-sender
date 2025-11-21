@@ -67,9 +67,12 @@ class EmailSender:
         try:
             variables = contact.get_template_variables()
             subject = self.template_processor.get_rendered_subject(subject_template, variables)
-            body = self.template_processor.get_rendered_body(body_template, variables)
+            # Only render body if template is provided and not empty
+            body = ""
+            if body_template and body_template.strip():
+                body = self.template_processor.get_rendered_body(body_template, variables)
             html_body = None
-            if html_template:
+            if html_template and html_template.strip():
                 html_body = self.template_processor.get_rendered_html(html_template, variables)
         except Exception as e:
             logger.error(f"Template rendering error for {contact.email}: {str(e)}")

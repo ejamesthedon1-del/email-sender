@@ -34,12 +34,14 @@
                     <small>Use variables like {FirstName}, {Brokerage}, {City}, etc.</small>
                 </div>
                 <div class="form-group">
-                    <label>Body (Plain Text)</label>
-                    <textarea id="templateBody" name="body" rows="10" required placeholder="Hi {FirstName},&#10;&#10;I hope this email finds you well..."></textarea>
+                    <label>Body (Plain Text) <span id="bodyRequired" style="color: red;">*</span></label>
+                    <textarea id="templateBody" name="body" rows="10" placeholder="Hi {FirstName},&#10;&#10;I hope this email finds you well..."></textarea>
+                    <small>Required if HTML body is not provided</small>
                 </div>
                 <div class="form-group">
                     <label>HTML Body (Optional)</label>
                     <textarea id="templateHtml" name="html_body" rows="10" placeholder="<html>...</html>"></textarea>
+                    <small>If provided, plain text body becomes optional</small>
                 </div>
                 <div class="form-group">
                     <label>Description</label>
@@ -60,6 +62,25 @@ let editingTemplateId = null;
 
 document.addEventListener('DOMContentLoaded', function() {
     loadTemplates();
+    
+    // Make body optional if HTML exists
+    const htmlBodyField = document.getElementById('templateHtml');
+    const bodyField = document.getElementById('templateBody');
+    const bodyRequired = document.getElementById('bodyRequired');
+    
+    function updateBodyRequired() {
+        const hasHtml = htmlBodyField.value.trim().length > 0;
+        if (hasHtml) {
+            bodyField.removeAttribute('required');
+            bodyRequired.style.display = 'none';
+        } else {
+            bodyField.setAttribute('required', 'required');
+            bodyRequired.style.display = 'inline';
+        }
+    }
+    
+    htmlBodyField.addEventListener('input', updateBodyRequired);
+    bodyField.addEventListener('input', updateBodyRequired);
 });
 
 function loadTemplates() {
@@ -100,6 +121,17 @@ function showCreateTemplateModal() {
     document.getElementById('templateForm').reset();
     document.getElementById('templateId').value = '';
     document.getElementById('templateModal').style.display = 'block';
+    // Initialize body required state
+    const htmlBodyField = document.getElementById('templateHtml');
+    const bodyField = document.getElementById('templateBody');
+    const bodyRequired = document.getElementById('bodyRequired');
+    if (htmlBodyField.value.trim().length > 0) {
+        bodyField.removeAttribute('required');
+        bodyRequired.style.display = 'none';
+    } else {
+        bodyField.setAttribute('required', 'required');
+        bodyRequired.style.display = 'inline';
+    }
 }
 
 function editTemplate(templateId) {
@@ -125,11 +157,21 @@ function closeModal(modalId) {
 
 document.getElementById('templateForm').addEventListener('submit', function(e) {
     e.preventDefault();
+    
+    const body = document.getElementById('templateBody').value.trim();
+    const htmlBody = document.getElementById('templateHtml').value.trim();
+    
+    // Validate that at least one body exists
+    if (!body && !htmlBody) {
+        alert('Please provide either a plain text body or an HTML body (or both).');
+        return;
+    }
+    
     const data = {
         name: document.getElementById('templateName').value,
         subject: document.getElementById('templateSubject').value,
-        body: document.getElementById('templateBody').value,
-        html_body: document.getElementById('templateHtml').value,
+        body: body,
+        html_body: htmlBody,
         description: document.getElementById('templateDescription').value
     };
     

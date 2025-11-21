@@ -155,9 +155,15 @@ class SMTPManager:
             msg['Subject'] = subject
             
             # Add plain text and HTML parts
-            msg.attach(MIMEText(body, 'plain'))
-            if html_body:
+            # Only attach plain text if it's not empty
+            if body and body.strip():
+                msg.attach(MIMEText(body, 'plain'))
+            if html_body and html_body.strip():
                 msg.attach(MIMEText(html_body, 'html'))
+            
+            # Ensure at least one part is attached
+            if not (body and body.strip()) and not (html_body and html_body.strip()):
+                raise ValueError("Either plain text body or HTML body must be provided")
             
             connection.send_message(msg)
             

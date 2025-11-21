@@ -25,11 +25,18 @@ def create_template():
     """Create a new template"""
     data = request.json
     
+    body = data.get('body', '').strip()
+    html_body = data.get('html_body', '').strip()
+    
+    # Validate that at least one body exists
+    if not body and not html_body:
+        return jsonify({'error': 'Either plain text body or HTML body (or both) must be provided'}), 400
+    
     template = {
         'name': data.get('name', 'Untitled Template'),
         'subject': data.get('subject', ''),
-        'body': data.get('body', ''),
-        'html_body': data.get('html_body', ''),
+        'body': body,
+        'html_body': html_body,
         'description': data.get('description', '')
     }
     
@@ -40,7 +47,26 @@ def create_template():
 def update_template(template_id):
     """Update a template"""
     data = request.json
-    template = Storage.update('templates', template_id, data)
+    
+    # Get existing template to merge with updates
+    existing = Storage.get('templates', template_id)
+    if not existing:
+        return jsonify({'error': 'Template not found'}), 404
+    
+    # Merge updates
+    body = data.get('body', existing.get('body', '')).strip() if 'body' in data else existing.get('body', '').strip()
+    html_body = data.get('html_body', existing.get('html_body', '')).strip() if 'html_body' in data else existing.get('html_body', '').strip()
+    
+    # Validate that at least one body exists
+    if not body and not html_body:
+        return jsonify({'error': 'Either plain text body or HTML body (or both) must be provided'}), 400
+    
+    # Update data with validated body fields
+    update_data = data.copy()
+    update_data['body'] = body
+    update_data['html_body'] = html_body
+    
+    template = Storage.update('templates', template_id, update_data)
     if not template:
         return jsonify({'error': 'Template not found'}), 404
     return jsonify(template)
