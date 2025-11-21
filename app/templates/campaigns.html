@@ -212,14 +212,24 @@ document.getElementById('createCampaignForm').addEventListener('submit', functio
     
     // Get selected SMTP account IDs
     const smtpAccountSelect = document.getElementById('smtpAccountSelect');
-    const selectedSmtpAccounts = Array.from(smtpAccountSelect.selectedOptions)
-        .map(opt => opt.value)
-        .filter(v => v !== 'all');
+    const allSelectedOptions = Array.from(smtpAccountSelect.selectedOptions).map(opt => opt.value);
+    
+    // If "all" is selected OR no specific accounts are selected, use 'all'
+    // Otherwise, use only the specific account IDs (excluding 'all')
+    let smtpAccountIds;
+    if (allSelectedOptions.includes('all') || allSelectedOptions.length === 0) {
+        smtpAccountIds = ['all'];
+    } else {
+        // Filter out 'all' if specific accounts are selected
+        smtpAccountIds = allSelectedOptions.filter(v => v !== 'all');
+    }
+    
+    console.log('Selected SMTP account IDs:', smtpAccountIds);
     
     const data = {
         name: formData.get('name'),
         template_id: formData.get('template_id'),
-        smtp_account_ids: selectedSmtpAccounts.length > 0 ? selectedSmtpAccounts : ['all'],
+        smtp_account_ids: smtpAccountIds,
         max_emails: formData.get('max_emails') ? parseInt(formData.get('max_emails')) : null,
         resend: formData.has('resend'),
         contact_ids: Array.from(document.getElementById('contactSelect').selectedOptions)

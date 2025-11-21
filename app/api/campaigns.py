@@ -25,16 +25,28 @@ def run_campaign(campaign_id: str, campaign_data: dict):
         smtp_accounts_data = Storage.load('smtp_accounts')
         selected_account_ids = campaign_data.get('smtp_account_ids', ['all'])
         
+        # Normalize selected account IDs to strings for comparison
+        if isinstance(selected_account_ids, str):
+            selected_account_ids = [selected_account_ids]
+        selected_account_ids = [str(aid) for aid in selected_account_ids]
+        
         # If 'all' is selected or not specified, use all active accounts
-        use_all_accounts = 'all' in selected_account_ids or not selected_account_ids
+        use_all_accounts = 'all' in selected_account_ids or len(selected_account_ids) == 0
+        
+        logger.info(f"Campaign {campaign_id}: Selected SMTP account IDs: {selected_account_ids}, Use all: {use_all_accounts}")
         
         accounts = []
         for acc_data in smtp_accounts_data:
             # Check if account should be used
             account_id = str(acc_data.get('id', ''))
-            if not use_all_accounts and account_id not in [str(aid) for aid in selected_account_ids]:
-                continue
             
+            # Skip if not using all accounts and this account is not in the selected list
+            if not use_all_accounts:
+                if account_id not in selected_account_ids:
+                    logger.debug(f"Skipping account {account_id} - not in selected list")
+                    continue
+            
+            # Only add active accounts
             if acc_data.get('is_active', True):
                 try:
                     acc = SMTPAccount(
@@ -52,15 +64,20 @@ def run_campaign(campaign_id: str, campaign_data: dict):
                         delay_between_emails=acc_data.get('delay_between_emails', 2.0)
                     )
                     accounts.append(acc)
+                    logger.info(f"Added SMTP account: {acc.name} (ID: {account_id})")
                 except Exception as e:
                     logger.error(f"Error creating SMTP account {acc_data.get('name')}: {str(e)}")
         
         if not accounts:
+            error_msg = 'No active SMTP accounts available or selected accounts not found'
+            logger.error(f"Campaign {campaign_id}: {error_msg}")
             Storage.update('campaigns', campaign_id, {
                 'status': 'failed',
-                'error': 'No active SMTP accounts available or selected accounts not found'
+                'error': error_msg
             })
             return
+        
+        logger.info(f"Campaign {campaign_id}: Using {len(accounts)} SMTP account(s): {[acc.name for acc in accounts]}")
         
         smtp_manager = SMTPManager(accounts)
         template_processor = TemplateProcessor()
@@ -202,8 +219,19 @@ def create_campaign():
     
     # Get SMTP account IDs (default to 'all' if not specified)
     smtp_account_ids = data.get('smtp_account_ids', ['all'])
-    if not smtp_account_ids or smtp_account_ids == ['all']:
+    
+    # Normalize to list and ensure it's not empty
+    if not smtp_account_ids:
         smtp_account_ids = ['all']
+    elif isinstance(smtp_account_ids, str):
+        smtp_account_ids = [smtp_account_ids]
+    elif isinstance(smtp_account_ids, list) and len(smtp_account_ids) == 0:
+        smtp_account_ids = ['all']
+    
+    # Convert all to strings for consistency
+    smtp_account_ids = [str(aid) for aid in smtp_account_ids]
+    
+    logger.info(f"Creating campaign with SMTP account IDs: {smtp_account_ids}")
     
     campaign = {
         'name': data.get('name', 'Untitled Campaign'),
@@ -219,6 +247,7 @@ def create_campaign():
     }
     
     campaign = Storage.add('campaigns', campaign)
+    logger.info(f"Campaign created: {campaign.get('id')} with SMTP accounts: {campaign.get('smtp_account_ids')}")
     return jsonify(campaign), 201
 
 @bp.route('/<campaign_id>/start', methods=['POST'])
