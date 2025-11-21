@@ -121,7 +121,7 @@ function loadCampaigns() {
                         ` : ''}
                         <div class="campaign-actions">
                             ${campaign.status === 'pending' ? `
-                            <button class="btn btn-sm btn-success" onclick="startCampaign('${campaign.id}')">Start</button>
+                            <button class="btn btn-sm btn-success" onclick="startCampaign('${campaign.id}', event)" id="start-btn-${campaign.id}">Start</button>
                             ` : ''}
                             ${campaign.status === 'running' ? `
                             <button class="btn btn-sm btn-info" onclick="viewCampaign('${campaign.id}')">View Progress</button>
@@ -253,13 +253,52 @@ document.getElementById('createCampaignForm').addEventListener('submit', functio
     .catch(err => alert('Error creating campaign: ' + err.message));
 });
 
-function startCampaign(campaignId) {
-    fetch(`/api/campaigns/${campaignId}/start`, {method: 'POST'})
-        .then(res => res.json())
-        .then(data => {
-            loadCampaigns();
-        })
-        .catch(err => alert('Error starting campaign: ' + err.message));
+function startCampaign(campaignId, event) {
+    console.log('Starting campaign:', campaignId);
+    
+    // Show loading state
+    let button = null;
+    if (event && event.target) {
+        button = event.target;
+    } else {
+        button = document.getElementById(`start-btn-${campaignId}`) || 
+                 document.querySelector(`button[onclick*="startCampaign('${campaignId}')"]`);
+    }
+    
+    if (button) {
+        button.disabled = true;
+        button.textContent = 'Starting...';
+    }
+    
+    fetch(`/api/campaigns/${campaignId}/start`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(res => {
+        if (!res.ok) {
+            return res.json().then(err => {
+                throw new Error(err.error || `HTTP ${res.status}: ${res.statusText}`);
+            });
+        }
+        return res.json();
+    })
+    .then(data => {
+        console.log('Campaign started:', data);
+        loadCampaigns();
+        // Campaign list will refresh automatically showing "running" status
+    })
+    .catch(err => {
+        console.error('Error starting campaign:', err);
+        alert('Error starting campaign: ' + err.message);
+        // Re-enable button on error
+        if (button) {
+            button.disabled = false;
+            button.textContent = 'Start';
+        }
+        loadCampaigns(); // Refresh to show current status
+    });
 }
 
 function deleteCampaign(campaignId) {

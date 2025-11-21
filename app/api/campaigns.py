@@ -253,21 +253,40 @@ def create_campaign():
 @bp.route('/<campaign_id>/start', methods=['POST'])
 def start_campaign(campaign_id):
     """Start a campaign"""
-    campaign = Storage.get('campaigns', campaign_id)
-    if not campaign:
-        return jsonify({'error': 'Campaign not found'}), 404
-    
-    if campaign.get('status') == 'running':
-        return jsonify({'error': 'Campaign is already running'}), 400
-    
-    # Start campaign in background thread
-    thread = threading.Thread(target=run_campaign, args=(campaign_id, campaign))
-    thread.daemon = True
-    thread.start()
-    
-    active_campaigns[campaign_id] = thread
-    
-    return jsonify({'status': 'started'})
+    try:
+        # Reload campaign from storage to get latest data
+        campaign = Storage.get('campaigns', campaign_id)
+        if not campaign:
+            logger.error(f"Campaign {campaign_id} not found")
+            return jsonify({'error': 'Campaign not found'}), 404
+        
+        if campaign.get('status') == 'running':
+            logger.warning(f"Campaign {campaign_id} is already running")
+            return jsonify({'error': 'Campaign is already running'}), 400
+        
+        # Log campaign details
+        logger.info(f"Starting campaign {campaign_id}: {campaign.get('name')}")
+        logger.info(f"Campaign SMTP account IDs: {campaign.get('smtp_account_ids')}")
+        logger.info(f"Full campaign data: {campaign}")
+        
+        # Make a copy of campaign data to avoid any reference issues
+        campaign_data = campaign.copy()
+        
+        # Start campaign in background thread
+        thread = threading.Thread(target=run_campaign, args=(campaign_id, campaign_data))
+        thread.daemon = True
+        thread.start()
+        
+        active_campaigns[campaign_id] = thread
+        
+        logger.info(f"Campaign {campaign_id} thread started")
+        return jsonify({'status': 'started', 'campaign_id': campaign_id, 'smtp_accounts': campaign.get('smtp_account_ids', ['all'])})
+        
+    except Exception as e:
+        logger.error(f"Error starting campaign {campaign_id}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Error starting campaign: {str(e)}'}), 500
 
 @bp.route('/<campaign_id>', methods=['PUT'])
 def update_campaign(campaign_id):
