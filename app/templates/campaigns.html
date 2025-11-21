@@ -36,6 +36,14 @@
                 </div>
                 
                 <div class="form-group">
+                    <label>SMTP Accounts</label>
+                    <select name="smtp_account_ids" id="smtpAccountSelect" multiple size="4" required>
+                        <option value="all">All Active Accounts</option>
+                    </select>
+                    <small>Hold Ctrl/Cmd to select multiple. Leave "All Active Accounts" selected to use all, or select specific accounts.</small>
+                </div>
+                
+                <div class="form-group">
                     <label>Contacts</label>
                     <select name="contact_ids" id="contactSelect" multiple size="5">
                         <option value="all">All Pending Contacts</option>
@@ -68,6 +76,7 @@
 document.addEventListener('DOMContentLoaded', function() {
     loadCampaigns();
     loadTemplates();
+    loadSmtpAccounts();
     loadContacts();
     setInterval(loadCampaigns, 5000); // Refresh every 5 seconds
 });
@@ -140,6 +149,22 @@ function loadTemplates() {
         });
 }
 
+function loadSmtpAccounts() {
+    fetch('/api/smtp-accounts')
+        .then(res => res.json())
+        .then(accounts => {
+            const select = document.getElementById('smtpAccountSelect');
+            // Clear existing options except "All Active Accounts"
+            select.innerHTML = '<option value="all">All Active Accounts</option>';
+            accounts.filter(a => a.is_active).forEach(account => {
+                const option = document.createElement('option');
+                option.value = account.id;
+                option.textContent = `${account.name} (${account.from_email})`;
+                select.appendChild(option);
+            });
+        });
+}
+
 function loadContacts() {
     fetch('/api/contacts')
         .then(res => res.json())
@@ -165,9 +190,17 @@ function closeModal(modalId) {
 document.getElementById('createCampaignForm').addEventListener('submit', function(e) {
     e.preventDefault();
     const formData = new FormData(e.target);
+    
+    // Get selected SMTP account IDs
+    const smtpAccountSelect = document.getElementById('smtpAccountSelect');
+    const selectedSmtpAccounts = Array.from(smtpAccountSelect.selectedOptions)
+        .map(opt => opt.value)
+        .filter(v => v !== 'all');
+    
     const data = {
         name: formData.get('name'),
         template_id: formData.get('template_id'),
+        smtp_account_ids: selectedSmtpAccounts.length > 0 ? selectedSmtpAccounts : ['all'],
         max_emails: formData.get('max_emails') ? parseInt(formData.get('max_emails')) : null,
         resend: formData.has('resend'),
         contact_ids: Array.from(document.getElementById('contactSelect').selectedOptions)
@@ -185,6 +218,8 @@ document.getElementById('createCampaignForm').addEventListener('submit', functio
         closeModal('createCampaignModal');
         loadCampaigns();
         e.target.reset();
+        // Reset SMTP account select to "All Active Accounts"
+        smtpAccountSelect.value = 'all';
     })
     .catch(err => alert('Error creating campaign: ' + err.message));
 });

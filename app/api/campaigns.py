@@ -21,10 +21,20 @@ def run_campaign(campaign_id: str, campaign_data: dict):
         from datetime import datetime
         Storage.update('campaigns', campaign_id, {'status': 'running', 'started_at': datetime.now().isoformat()})
         
-        # Load SMTP accounts
+        # Load SMTP accounts - filter by selected accounts if specified
         smtp_accounts_data = Storage.load('smtp_accounts')
+        selected_account_ids = campaign_data.get('smtp_account_ids', ['all'])
+        
+        # If 'all' is selected or not specified, use all active accounts
+        use_all_accounts = 'all' in selected_account_ids or not selected_account_ids
+        
         accounts = []
         for acc_data in smtp_accounts_data:
+            # Check if account should be used
+            account_id = str(acc_data.get('id', ''))
+            if not use_all_accounts and account_id not in [str(aid) for aid in selected_account_ids]:
+                continue
+            
             if acc_data.get('is_active', True):
                 try:
                     acc = SMTPAccount(
@@ -48,7 +58,7 @@ def run_campaign(campaign_id: str, campaign_data: dict):
         if not accounts:
             Storage.update('campaigns', campaign_id, {
                 'status': 'failed',
-                'error': 'No active SMTP accounts available'
+                'error': 'No active SMTP accounts available or selected accounts not found'
             })
             return
         
@@ -190,9 +200,15 @@ def create_campaign():
     """Create a new campaign"""
     data = request.json
     
+    # Get SMTP account IDs (default to 'all' if not specified)
+    smtp_account_ids = data.get('smtp_account_ids', ['all'])
+    if not smtp_account_ids or smtp_account_ids == ['all']:
+        smtp_account_ids = ['all']
+    
     campaign = {
         'name': data.get('name', 'Untitled Campaign'),
         'template_id': data.get('template_id'),
+        'smtp_account_ids': smtp_account_ids,
         'contact_ids': data.get('contact_ids', []),
         'max_emails': data.get('max_emails'),
         'resend': data.get('resend', False),

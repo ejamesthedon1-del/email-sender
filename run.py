@@ -8,7 +8,7 @@ import os
 app = create_app()
 
 if __name__ == '__main__':
-    port = int(os.getenv('PORT', 5001))
+    port = int(os.getenv('PORT', 8080))
     debug = os.getenv('FLASK_ENV') == 'development'
     print(f"\n{'='*60}")
     print(f"Email Outreach Platform")
