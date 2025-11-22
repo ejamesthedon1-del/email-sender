@@ -73,12 +73,35 @@
 </div>
 
 <script>
+// Functions are defined below, they'll be in global scope
+// No need to assign to window since they're defined at script level
+
 document.addEventListener('DOMContentLoaded', function() {
     loadCampaigns();
     loadTemplates();
     loadSmtpAccounts();
     loadContacts();
     setInterval(loadCampaigns, 5000); // Refresh every 5 seconds
+    
+    // Use event delegation for campaign buttons (works with dynamically loaded content)
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('start-campaign-btn')) {
+            e.preventDefault();
+            const campaignId = e.target.getAttribute('data-campaign-id');
+            console.log('Start button clicked for campaign:', campaignId);
+            startCampaign(campaignId);
+        } else if (e.target.classList.contains('delete-campaign-btn')) {
+            e.preventDefault();
+            const campaignId = e.target.getAttribute('data-campaign-id');
+            console.log('Delete button clicked for campaign:', campaignId);
+            deleteCampaign(campaignId);
+        } else if (e.target.classList.contains('view-campaign-btn')) {
+            e.preventDefault();
+            const campaignId = e.target.getAttribute('data-campaign-id');
+            console.log('View button clicked for campaign:', campaignId);
+            viewCampaign(campaignId);
+        }
+    });
 });
 
 function loadCampaigns() {
@@ -133,12 +156,12 @@ function loadCampaigns() {
                         ` : ''}
                         <div class="campaign-actions">
                             ${campaign.status === 'pending' ? `
-                            <button class="btn btn-sm btn-success" onclick="startCampaign('${campaign.id}', event)" id="start-btn-${campaign.id}">Start</button>
+                            <button class="btn btn-sm btn-success start-campaign-btn" data-campaign-id="${campaign.id}" id="start-btn-${campaign.id}">Start</button>
                             ` : ''}
                             ${campaign.status === 'running' ? `
-                            <button class="btn btn-sm btn-info" onclick="viewCampaign('${campaign.id}')">View Progress</button>
+                            <button class="btn btn-sm btn-info view-campaign-btn" data-campaign-id="${campaign.id}">View Progress</button>
                             ` : ''}
-                            <button class="btn btn-sm btn-danger" onclick="deleteCampaign('${campaign.id}')">Delete</button>
+                            <button class="btn btn-sm btn-danger delete-campaign-btn" data-campaign-id="${campaign.id}">Delete</button>
                         </div>
                     </div>
                 </div>
@@ -210,13 +233,23 @@ function loadContacts() {
 }
 
 function showCreateCampaignModal() {
-    document.getElementById('createCampaignModal').style.display = 'block';
+    const modal = document.getElementById('createCampaignModal');
+    if (!modal) {
+        console.error('Create campaign modal not found');
+        return;
+    }
+    modal.style.display = 'block';
     // Reload SMTP accounts when modal opens
     loadSmtpAccounts();
 }
 
 function closeModal(modalId) {
-    document.getElementById(modalId).style.display = 'none';
+    const modal = document.getElementById(modalId);
+    if (!modal) {
+        console.error('Modal not found:', modalId);
+        return;
+    }
+    modal.style.display = 'none';
 }
 
 document.getElementById('createCampaignForm').addEventListener('submit', function(e) {
@@ -266,22 +299,22 @@ document.getElementById('createCampaignForm').addEventListener('submit', functio
     .catch(err => alert('Error creating campaign: ' + err.message));
 });
 
-function startCampaign(campaignId, event) {
+function startCampaign(campaignId) {
     console.log('Starting campaign:', campaignId);
     
-    // Show loading state
-    let button = null;
-    if (event && event.target) {
-        button = event.target;
-    } else {
-        button = document.getElementById(`start-btn-${campaignId}`) || 
-                 document.querySelector(`button[onclick*="startCampaign('${campaignId}')"]`);
+    // Get the button element
+    const button = document.getElementById(`start-btn-${campaignId}`);
+    
+    if (!button) {
+        console.error('Start button not found for campaign:', campaignId);
+        alert('Error: Could not find start button. Please refresh the page.');
+        return;
     }
     
-    if (button) {
-        button.disabled = true;
-        button.textContent = 'Starting...';
-    }
+    // Show loading state
+    button.disabled = true;
+    const originalText = button.textContent;
+    button.textContent = 'Starting...';
     
     fetch(`/api/campaigns/${campaignId}/start`, {
         method: 'POST',
@@ -290,6 +323,7 @@ function startCampaign(campaignId, event) {
         }
     })
     .then(res => {
+        console.log('Response status:', res.status);
         if (!res.ok) {
             return res.json().then(err => {
                 throw new Error(err.error || `HTTP ${res.status}: ${res.statusText}`);
@@ -298,40 +332,57 @@ function startCampaign(campaignId, event) {
         return res.json();
     })
     .then(data => {
-        console.log('Campaign started:', data);
+        console.log('Campaign started successfully:', data);
+        // Refresh campaigns list to show updated status
         loadCampaigns();
-        // Campaign list will refresh automatically showing "running" status
     })
     .catch(err => {
         console.error('Error starting campaign:', err);
         alert('Error starting campaign: ' + err.message);
         // Re-enable button on error
-        if (button) {
-            button.disabled = false;
-            button.textContent = 'Start';
-        }
-        loadCampaigns(); // Refresh to show current status
+        button.disabled = false;
+        button.textContent = originalText;
+        // Refresh to show current status
+        loadCampaigns();
     });
 }
 
 function deleteCampaign(campaignId) {
     if (!confirm('Are you sure you want to delete this campaign?')) return;
     
+    console.log('Deleting campaign:', campaignId);
     fetch(`/api/campaigns/${campaignId}`, {method: 'DELETE'})
         .then(res => res.json())
         .then(data => {
+            console.log('Campaign deleted:', data);
             loadCampaigns();
         })
-        .catch(err => alert('Error deleting campaign: ' + err.message));
+        .catch(err => {
+            console.error('Error deleting campaign:', err);
+            alert('Error deleting campaign: ' + err.message);
+        });
 }
 
 function viewCampaign(campaignId) {
+    console.log('Viewing campaign:', campaignId);
     fetch(`/api/campaigns/${campaignId}`)
         .then(res => res.json())
         .then(campaign => {
-            alert(`Campaign: ${campaign.name}\nStatus: ${campaign.status}\nProgress: ${campaign.progress?.current || 0}/${campaign.progress?.total || 0} (${campaign.progress?.percentage?.toFixed(1) || 0}%)\nSent: ${campaign.emails_sent || 0}\nFailed: ${campaign.emails_failed || 0}`);
+            const info = `Campaign: ${campaign.name}\nStatus: ${campaign.status}\nProgress: ${campaign.progress?.current || 0}/${campaign.progress?.total || 0} (${campaign.progress?.percentage?.toFixed(1) || 0}%)\nSent: ${campaign.emails_sent || 0}\nFailed: ${campaign.emails_failed || 0}\nSMTP Accounts: ${campaign.smtp_account_ids ? campaign.smtp_account_ids.join(', ') : 'All'}`;
+            alert(info);
+        })
+        .catch(err => {
+            console.error('Error viewing campaign:', err);
+            alert('Error loading campaign details: ' + err.message);
         });
 }
+
+// Ensure functions are accessible globally (for onclick handlers)
+window.startCampaign = startCampaign;
+window.deleteCampaign = deleteCampaign;
+window.viewCampaign = viewCampaign;
+window.showCreateCampaignModal = showCreateCampaignModal;
+window.closeModal = closeModal;
 </script>
 {% endblock %}
 

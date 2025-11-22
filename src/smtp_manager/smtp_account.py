@@ -4,6 +4,7 @@ SMTP Account Manager - Handles multiple SMTP accounts with rotation
 import smtplib
 import ssl
 import logging
+import uuid
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -153,6 +154,10 @@ class SMTPManager:
             msg['From'] = f"{account.from_name} <{account.from_email}>" if account.from_name else account.from_email
             msg['To'] = to_email
             msg['Subject'] = subject
+            
+            # Add transactional headers
+            msg['X-Transactional'] = 'true'
+            msg['X-Entity-Ref-ID'] = str(uuid.uuid4())
             
             # Add plain text and HTML parts
             # Only attach plain text if it's not empty

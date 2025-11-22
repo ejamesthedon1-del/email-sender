@@ -7,6 +7,8 @@
     <div class="page-header">
         <h2>Contacts</h2>
         <div>
+            <button class="btn btn-info" onclick="document.getElementById('validateFile').click()">Validate CSV</button>
+            <input type="file" id="validateFile" accept=".csv" style="display:none" onchange="validateCsvEmails(event)">
             <button class="btn btn-secondary" onclick="document.getElementById('uploadFile').click()">Upload CSV</button>
             <input type="file" id="uploadFile" accept=".csv" style="display:none" onchange="uploadContacts(event)">
             <button class="btn btn-primary" onclick="showAddContactModal()">+ Add Contact</button>
@@ -222,6 +224,122 @@ function bulkDelete() {
         loadContacts();
     })
     .catch(err => alert('Error deleting contacts: ' + err.message));
+}
+
+function validateCsvEmails(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    // Show loading message
+    const loadingMsg = document.createElement('div');
+    loadingMsg.id = 'validationLoading';
+    loadingMsg.className = 'validation-status';
+    loadingMsg.innerHTML = '<div class="validation-loading">Validating emails in CSV file...</div>';
+    document.querySelector('.page-header').after(loadingMsg);
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    fetch('/api/contacts/validate-csv', {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        const loadingEl = document.getElementById('validationLoading');
+        if (loadingEl) loadingEl.remove();
+        
+        if (data.error) {
+            alert('Error validating CSV: ' + data.error);
+            event.target.value = '';
+            return;
+        }
+        
+        // Show validation results
+        const resultMsg = document.createElement('div');
+        resultMsg.id = 'validationResults';
+        resultMsg.className = 'validation-status';
+        
+        const total = data.valid_count + data.invalid_count;
+        const validPercent = total > 0 ? ((data.valid_count / total) * 100).toFixed(1) : 0;
+        
+        resultMsg.innerHTML = `
+            <div class="validation-results">
+                <h4>📧 Email Validation Results</h4>
+                <div class="validation-stats">
+                    <div class="stat-item valid">
+                        <span class="stat-label">Valid:</span>
+                        <span class="stat-value">${data.valid_count}</span>
+                    </div>
+                    <div class="stat-item invalid">
+                        <span class="stat-label">Invalid:</span>
+                        <span class="stat-value">${data.invalid_count}</span>
+                    </div>
+                    <div class="stat-item total">
+                        <span class="stat-label">Total:</span>
+                        <span class="stat-value">${total}</span>
+                    </div>
+                    <div class="stat-item percent">
+                        <span class="stat-label">Valid %:</span>
+                        <span class="stat-value">${validPercent}%</span>
+                    </div>
+                </div>
+                ${data.email_column_used ? `
+                <div class="validation-info">
+                    <small><strong>Email Column Used:</strong> <code>${data.email_column_used}</code></small>
+                </div>
+                ` : ''}
+                ${data.sample_valid_emails && data.sample_valid_emails.length > 0 ? `
+                <div class="sample-valid-emails">
+                    <strong>Sample validated emails (first 5):</strong>
+                    <ul>
+                        ${data.sample_valid_emails.map(email => `<li><code>${email}</code></li>`).join('')}
+                        ${data.valid_count > 5 ? `<li><em>... and ${data.valid_count - 5} more valid emails</em></li>` : ''}
+                    </ul>
+                </div>
+                ` : ''}
+                ${data.invalid_emails && data.invalid_emails.length > 0 ? `
+                <div class="invalid-emails-list">
+                    <strong>Invalid emails found (showing first 10):</strong>
+                    <ul>
+                        ${data.invalid_emails.slice(0, 10).map(email => `<li><code>${email}</code></li>`).join('')}
+                        ${data.invalid_emails.length > 10 ? `<li><em>... and ${data.invalid_emails.length - 10} more</em></li>` : ''}
+                    </ul>
+                </div>
+                ` : (data.invalid_count > 0 ? `
+                <div class="validation-note">
+                    <p><em>${data.invalid_count} invalid email(s) were removed, but details are not shown here.</em></p>
+                </div>
+                ` : (data.invalid_count === 0 && data.valid_count > 0 ? `
+                <div class="validation-success">
+                    <p>✓ <strong>All ${data.valid_count} email(s) in the CSV are valid!</strong></p>
+                    ${data.sample_valid_emails && data.sample_valid_emails.length > 0 ? `
+                    <p><small>Sample emails validated: ${data.sample_valid_emails.slice(0, 3).join(', ')}${data.valid_count > 3 ? '...' : ''}</small></p>
+                    ` : ''}
+                </div>
+                ` : ''))}
+                ${data.download_url ? `
+                <div class="validation-actions">
+                    <a href="${data.download_url}" download class="btn btn-success">Download Cleaned CSV</a>
+                    <button class="btn btn-secondary" onclick="document.getElementById('validationResults').remove()">Close</button>
+                </div>
+                ` : ''}
+            </div>
+        `;
+        
+        document.querySelector('.page-header').after(resultMsg);
+        
+        // Scroll to results
+        resultMsg.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        
+        event.target.value = '';
+    })
+    .catch(err => {
+        const loadingEl = document.getElementById('validationLoading');
+        if (loadingEl) loadingEl.remove();
+        alert('Error validating CSV: ' + err.message);
+        event.target.value = '';
+    });
 }
 </script>
 {% endblock %}
