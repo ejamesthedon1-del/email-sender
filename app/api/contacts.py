@@ -56,6 +56,15 @@ def create_contact():
     contact = Storage.add('contacts', contact)
     return jsonify(contact), 201
 
+def clean_email(email):
+    """Remove mailto: prefix from email if present"""
+    if not email:
+        return email
+    email = email.strip()
+    if email.lower().startswith('mailto:'):
+        email = email[7:].strip()
+    return email
+
 @bp.route('/upload', methods=['POST'])
 def upload_contacts():
     """Upload contacts from CSV file"""
@@ -113,6 +122,80 @@ def upload_contacts():
             'status': 'success',
             'contacts_added': contacts_added,
             'contacts_skipped': contacts_skipped
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'Error processing CSV: {str(e)}'}), 400
+
+@bp.route('/clean-upload', methods=['POST'])
+def clean_upload_contacts():
+    """Upload contacts from CSV file with email cleaning (removes mailto: prefixes)"""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+    
+    try:
+        # Read CSV file
+        stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
+        csv_reader = csv.DictReader(stream)
+        
+        contacts_added = 0
+        contacts_skipped = 0
+        emails_cleaned = 0
+        
+        for row in csv_reader:
+            # Normalize column names
+            normalized_row = {k.lower().strip().replace(' ', '_'): v for k, v in row.items()}
+            
+            email = normalized_row.get('email', '').strip()
+            if not email:
+                contacts_skipped += 1
+                continue
+            
+            # Clean email (remove mailto: prefix)
+            original_email = email
+            email = clean_email(email)
+            if email != original_email:
+                emails_cleaned += 1
+            
+            if not email:
+                contacts_skipped += 1
+                continue
+            
+            # Check if contact already exists
+            existing_contacts = Storage.load('contacts')
+            if any(c.get('email', '').lower() == email.lower() for c in existing_contacts):
+                contacts_skipped += 1
+                continue
+            
+            contact = {
+                'email': email,
+                'first_name': normalized_row.get('first_name', '').strip(),
+                'last_name': normalized_row.get('last_name', '').strip(),
+                'company': normalized_row.get('company', '').strip(),
+                'brokerage': normalized_row.get('brokerage', '').strip(),
+                'city': normalized_row.get('city', '').strip(),
+                'state': normalized_row.get('state', '').strip(),
+                'custom1': normalized_row.get('custom1', '').strip(),
+                'custom2': normalized_row.get('custom2', '').strip(),
+                'custom3': normalized_row.get('custom3', '').strip(),
+                'custom4': normalized_row.get('custom4', '').strip(),
+                'custom5': normalized_row.get('custom5', '').strip(),
+                'status': 'pending',
+                'sent_count': 0
+            }
+            
+            Storage.add('contacts', contact)
+            contacts_added += 1
+        
+        return jsonify({
+            'status': 'success',
+            'contacts_added': contacts_added,
+            'contacts_skipped': contacts_skipped,
+            'emails_cleaned': emails_cleaned
         })
         
     except Exception as e:

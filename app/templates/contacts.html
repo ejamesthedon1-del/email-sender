@@ -10,6 +10,7 @@
             <button class="btn btn-info" onclick="document.getElementById('validateFile').click()">Validate CSV</button>
             <input type="file" id="validateFile" accept=".csv" style="display:none" onchange="validateCsvEmails(event)">
             <button class="btn btn-secondary" onclick="document.getElementById('uploadFile').click()">Upload CSV</button>
+            <button class="btn btn-secondary" onclick="showCleanUploadModal()">Clean & Upload CSV</button>
             <input type="file" id="uploadFile" accept=".csv" style="display:none" onchange="uploadContacts(event)">
             <button class="btn btn-primary" onclick="showAddContactModal()">+ Add Contact</button>
         </div>
@@ -82,6 +83,42 @@
                     <button type="submit" class="btn btn-primary">Add Contact</button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- Clean & Upload CSV Modal -->
+<div id="cleanUploadModal" class="modal">
+    <div class="modal-content" style="max-width: 800px;">
+        <div class="modal-header">
+            <h3>Clean & Upload CSV</h3>
+            <span class="close" onclick="closeModal('cleanUploadModal')">&times;</span>
+        </div>
+        <div class="modal-body">
+            <p style="margin-bottom: 1rem; color: #666;">
+                Upload a CSV file to automatically clean email addresses (removes "mailto:" prefixes) before adding contacts.
+            </p>
+            <div class="form-group">
+                <label>Select CSV File</label>
+                <input type="file" id="cleanUploadFile" accept=".csv" onchange="previewCleanCSV(event)" style="padding: 0.5rem;">
+            </div>
+            <div id="cleanPreview" style="display:none; margin-top: 1rem;">
+                <h4 style="margin-bottom: 0.5rem;">Preview (First 5 rows)</h4>
+                <div style="max-height: 300px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 4px; padding: 1rem; background: #f9fafb;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                        <thead id="cleanPreviewHeader" style="background: #f0f0f0; font-weight: 600;">
+                        </thead>
+                        <tbody id="cleanPreviewBody">
+                        </tbody>
+                    </table>
+                </div>
+                <div id="cleanStats" style="margin-top: 1rem; padding: 0.75rem; background: #e8f4f8; border-radius: 4px; font-size: 0.9rem;">
+                </div>
+            </div>
+            <div class="form-actions" style="margin-top: 1.5rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('cleanUploadModal')">Cancel</button>
+                <button type="button" class="btn btn-primary" id="cleanUploadBtn" onclick="cleanAndUploadCSV()" disabled>Clean & Upload</button>
+            </div>
         </div>
     </div>
 </div>
@@ -172,6 +209,150 @@ function uploadContacts(event) {
 
 function showAddContactModal() {
     document.getElementById('addContactModal').style.display = 'block';
+}
+
+function showCleanUploadModal() {
+    document.getElementById('cleanUploadModal').style.display = 'block';
+    // Reset form
+    document.getElementById('cleanUploadFile').value = '';
+    document.getElementById('cleanPreview').style.display = 'none';
+    document.getElementById('cleanUploadBtn').disabled = true;
+}
+
+let cleanCSVData = null;
+
+function previewCleanCSV(event) {
+    const file = event.target.files[0];
+    if (!file) {
+        document.getElementById('cleanPreview').style.display = 'none';
+        document.getElementById('cleanUploadBtn').disabled = true;
+        return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const text = e.target.result;
+        const lines = text.split('\n').filter(line => line.trim());
+        const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+        
+        // Find email column index
+        const emailColIndex = headers.findIndex(h => h.toLowerCase().includes('email'));
+        
+        if (emailColIndex === -1) {
+            alert('No email column found in CSV. Please ensure your CSV has an "email" column.');
+            event.target.value = '';
+            return;
+        }
+        
+        // Process rows and clean emails
+        const cleanedRows = [];
+        let cleanedCount = 0;
+        let totalRows = 0;
+        
+        for (let i = 1; i < Math.min(lines.length, 6); i++) { // Preview first 5 rows
+            const row = lines[i].split(',').map(cell => cell.trim().replace(/^"|"$/g, ''));
+            if (row.length > emailColIndex) {
+                let email = row[emailColIndex];
+                const originalEmail = email;
+                
+                // Remove mailto: prefix
+                if (email.toLowerCase().startsWith('mailto:')) {
+                    email = email.substring(7);
+                    cleanedCount++;
+                }
+                
+                row[emailColIndex] = email;
+                cleanedRows.push({original: originalEmail, cleaned: email, row: row});
+            }
+        }
+        
+        // Count total cleaned emails in full file
+        for (let i = 1; i < lines.length; i++) {
+            const row = lines[i].split(',').map(cell => cell.trim().replace(/^"|"$/g, ''));
+            if (row.length > emailColIndex) {
+                totalRows++;
+                const email = row[emailColIndex];
+                if (email.toLowerCase().startsWith('mailto:')) {
+                    cleanedCount++;
+                }
+            }
+        }
+        
+        // Store cleaned CSV data
+        cleanCSVData = {
+            file: file,
+            headers: headers,
+            emailColIndex: emailColIndex,
+            totalRows: totalRows,
+            cleanedCount: cleanedCount
+        };
+        
+        // Display preview
+        const previewHeader = document.getElementById('cleanPreviewHeader');
+        previewHeader.innerHTML = '<tr>' + headers.map(h => `<th style="padding: 0.5rem; text-align: left; border-bottom: 2px solid #ddd;">${h}</th>`).join('') + '</tr>';
+        
+        const previewBody = document.getElementById('cleanPreviewBody');
+        previewBody.innerHTML = cleanedRows.map(item => {
+            const cells = item.row.map((cell, idx) => {
+                if (idx === emailColIndex) {
+                    return `<td style="padding: 0.5rem; border-bottom: 1px solid #eee;">
+                        <span style="color: #dc2626; text-decoration: line-through; font-size: 0.85em;">${item.original}</span><br>
+                        <span style="color: #059669; font-weight: 500;">${item.cleaned}</span>
+                    </td>`;
+                }
+                return `<td style="padding: 0.5rem; border-bottom: 1px solid #eee;">${cell || '-'}</td>`;
+            }).join('');
+            return '<tr>' + cells + '</tr>';
+        }).join('');
+        
+        // Display stats
+        const stats = document.getElementById('cleanStats');
+        stats.innerHTML = `
+            <strong>Total rows:</strong> ${totalRows}<br>
+            <strong>Emails to clean:</strong> ${cleanedCount} (will remove "mailto:" prefix)<br>
+            <strong>Already clean:</strong> ${totalRows - cleanedCount}
+        `;
+        
+        document.getElementById('cleanPreview').style.display = 'block';
+        document.getElementById('cleanUploadBtn').disabled = false;
+    };
+    
+    reader.readAsText(file);
+}
+
+function cleanAndUploadCSV() {
+    if (!cleanCSVData) {
+        alert('Please select a CSV file first.');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', cleanCSVData.file);
+    
+    document.getElementById('cleanUploadBtn').disabled = true;
+    document.getElementById('cleanUploadBtn').textContent = 'Processing...';
+    
+    fetch('/api/contacts/clean-upload', {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            alert('Error: ' + data.error);
+        } else {
+            alert(`Successfully cleaned and uploaded ${data.contacts_added} contacts.\n${data.contacts_skipped} skipped.\n${data.emails_cleaned} emails had "mailto:" prefix removed.`);
+            closeModal('cleanUploadModal');
+            loadContacts();
+        }
+    })
+    .catch(err => {
+        alert('Error uploading contacts: ' + err.message);
+    })
+    .finally(() => {
+        document.getElementById('cleanUploadBtn').disabled = false;
+        document.getElementById('cleanUploadBtn').textContent = 'Clean & Upload';
+    });
 }
 
 function closeModal(modalId) {
